@@ -34,15 +34,16 @@ describe('EditTool', () => {
     const tool = new EditTool(createFakeKaos(), PERMISSIVE_WORKSPACE);
 
     expect(tool.name).toBe('Edit');
-    expect(tool.description).toContain('text view returned by Read');
-    expect(tool.description).toContain('omit the line-number prefix');
-    expect(tool.description).toContain('old_string must occur exactly once');
-    expect(tool.description).toContain('multiple Edit calls in parallel');
-    // Editing files should go through Edit, not a Shell `sed` command.
-    expect(tool.description).toContain('Shell `sed`');
+    expect(tool.description).toContain('Read output view');
+    expect(tool.description).toContain('line-number prefix');
+    expect(tool.description).toContain('`old_string` must be unique');
+    expect(tool.description).toContain('Multiple independent Edit calls may run in one response');
+    // Editing files should go through Edit, not Write and not a Bash `sed`
+    // command. The prompt names both alternatives explicitly.
+    expect(tool.description).toContain('Do not use Write or Bash `sed`');
     // Parallel Edit calls on the same file are serialized and applied in
     // response order; mismatched old_string fails explicitly.
-    expect(tool.description).toContain('they apply in the order the calls appear in your response');
+    expect(tool.description).toContain('same-file edits in response order');
     expect(tool.description).toContain('old_string not found');
     expect(tool.parameters).toMatchObject({
       type: 'object',

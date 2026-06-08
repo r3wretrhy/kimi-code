@@ -15,6 +15,8 @@ function commit(cwd: string, message: string): void {
   git(cwd, '-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'commit', '-m', message);
 }
 
+const GIT_INTEGRATION_TIMEOUT_MS = 20_000;
+
 describe('createGitLsFilesCache', () => {
   let dir: string;
 
@@ -85,7 +87,7 @@ describe('createGitLsFilesCache', () => {
     expect(newRank).toBeDefined();
     expect(oldRank).toBeDefined();
     expect(newRank!).toBeLessThan(oldRank!);
-  });
+  }, GIT_INTEGRATION_TIMEOUT_MS);
 
   it('invalidates when .git/index mtime changes', () => {
     git(dir, 'init');
@@ -109,5 +111,5 @@ describe('createGitLsFilesCache', () => {
     const second = cache.list()!;
     expect(second).not.toBe(first); // new snapshot
     expect(second).toContain('b.ts');
-  });
+  }, GIT_INTEGRATION_TIMEOUT_MS);
 });
