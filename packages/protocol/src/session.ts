@@ -9,7 +9,7 @@
  * timestamps; the cross-package adapter lives in
  * `packages/services/src/impls/session-service-impl.ts` (`toProtocolSession`).
  *
- * Coverage gaps (TBD pending agent-core surface work — see W6 STATUS Decisions):
+ * Coverage gaps pending agent-core surface work:
  *   - `status`: agent-core does not expose a session "status" enum yet; the
  *     adapter returns 'idle' for now. Will be promoted to a real signal once
  *     the bridge surfaces `event.session.status`.
@@ -24,13 +24,17 @@
  *     defaults applied as documented in the adapter.
  *
  * These are NOT silent omissions: the shape stays on-wire stable; the daemon
- * fills with empty/zero values flagged in W6 STATUS. W7+ chains backfill as
- * agent-core surfaces grow.
+ * fills with empty/zero defaults until agent-core surfaces grow.
  */
 
 import { z } from 'zod';
 
+import {
+  promptPermissionModeSchema,
+  promptThinkingSchema,
+} from './rest/prompt';
 import { isoDateTimeSchema } from './time';
+import { workspaceIdSchema } from './workspace';
 
 // --- 2.x SessionStatus ------------------------------------------------------
 
@@ -95,15 +99,27 @@ export type PermissionRule = z.infer<typeof permissionRuleSchema>;
 
 export const sessionAgentConfigSchema = z.object({
   // SCHEMAS.md §2 documents `model` as required (e.g. "moonshot-v1-128k").
-  // W6.2 relaxes to allow empty string at parse time: agent-core's
-  // `listSessions` does NOT surface the per-session model, so the daemon
-  // returns "" until the gap closes in a later chain (W7+ may wire
-  // `getModel` via `bridge.rpc.getModel({sessionId, agentId: 'main'})`).
+  // Allow empty string at parse time: agent-core's `listSessions` does NOT
+  // surface the per-session model, so the daemon returns "" until the gap
+  // closes (for example via `bridge.rpc.getModel({sessionId, agentId: 'main'})`).
   // The wire shape stays the same — clients should treat "" as "unknown".
   model: z.string(),
   system_prompt: z.string().optional(),
   tools: z.array(z.string()).optional(),
   mcp_servers: z.array(z.string()).optional(),
+  // Runtime controls. Optional on the READ side because the daemon's
+  // `toProtocolSession` adapter doesn't backfill them (CoreAPI doesn't
+  // expose them on the list path) — callers wanting the live values use
+  // `GET /v1/sessions/{sid}/status`. Optional on the WRITE side
+  // (`.partial()` → `sessionAgentConfigPartialSchema`) so `POST
+  // /v1/sessions/{sid}/profile` can supply any subset to dispatch the
+  // matching `setThinking` / `setPermission` / `enterPlan|cancelPlan` RPCs
+  // through `IPromptService.applyAgentState`. The enum literals are
+  // shared with `promptSubmissionSchema` so prompt-body overrides and
+  // /profile updates speak the same vocabulary.
+  thinking: promptThinkingSchema.optional(),
+  permission_mode: promptPermissionModeSchema.optional(),
+  plan_mode: z.boolean().optional(),
 });
 
 export type SessionAgentConfig = z.infer<typeof sessionAgentConfigSchema>;
@@ -129,6 +145,14 @@ export type SessionMetadata = z.infer<typeof sessionMetadataSchema>;
 
 export const sessionSchema = z.object({
   id: z.string().min(1),
+  /**
+   * Workspace this session belongs to. Always derived from
+   * `encodeWorkDirKey(summary.workDir)`, so every session has one; if the
+   * caller never registered a workspace for that root the id will simply
+   * not appear in `GET /workspaces` (front-end can group such sessions under
+   * an "unregistered" bucket).
+   */
+  workspace_id: workspaceIdSchema,
   title: z.string(),
   created_at: isoDateTimeSchema,
   updated_at: isoDateTimeSchema,
@@ -149,17 +173,25 @@ export type Session = z.infer<typeof sessionSchema>;
 /**
  * `POST /v1/sessions` request body (SCHEMAS.md §2 `SessionCreate`).
  *
- * `metadata.cwd` is the canonical session working dir. Inputs without
- * `metadata.cwd` are rejected by the daemon — agent-core `createSession`
- * REQUIRES `workDir` (see `core-impl.ts:requiredWorkDir`).
+ * Either `workspace_id` or `metadata.cwd` must be supplied (caller picks):
  *
- * Wire validation: send `metadata: { cwd: "/tmp/..." }`. Other metadata keys
- * pass through.
+ *   - `workspace_id` (preferred): daemon route layer resolves the workspace
+ *     root via the workspace registry and feeds it as `metadata.cwd` to
+ *     agent-core's `createSession`.
+ *   - `metadata.cwd` (legacy / direct): caller passes the absolute cwd
+ *     verbatim; no workspace association is created.
+ *
+ * If BOTH are supplied they must agree on the same root, otherwise the
+ * daemon returns `40001 validation.failed` from the route layer. The wire
+ * schema accepts either ordering; the at-least-one check happens at the
+ * route layer (we don't superRefine in the protocol because daemon-side
+ * needs to surface the dedicated validation error code).
  */
 export const sessionCreateSchema = z.object({
   title: z.string().min(1).optional(),
-  metadata: sessionMetadataSchema,
+  metadata: sessionMetadataSchema.optional(),
   agent_config: sessionAgentConfigPartialSchema.optional(),
+  workspace_id: workspaceIdSchema.optional(),
 });
 
 export type SessionCreate = z.infer<typeof sessionCreateSchema>;
@@ -178,3 +210,17 @@ export const sessionUpdateSchema = z.object({
 });
 
 export type SessionUpdate = z.infer<typeof sessionUpdateSchema>;
+
+export const sessionForkSchema = z.object({
+  title: z.string().min(1).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type SessionFork = z.infer<typeof sessionForkSchema>;
+
+export const sessionChildCreateSchema = z.object({
+  title: z.string().min(1).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type SessionChildCreate = z.infer<typeof sessionChildCreateSchema>;

@@ -1,5 +1,8 @@
 /**
- * Approval REST endpoint schemas (REST.md §3.6, W8.1 / Chain 5).
+ * Approval REST endpoint schemas (REST.md §3.6).
+ *
+ *   GET  /v1/sessions/{session_id}/approvals?status=pending
+ *     Reply: { items: ApprovalRequest[] }
  *
  *   POST /v1/sessions/{session_id}/approvals/{approval_id}
  *     Body:  ApprovalResponse (decision + optional scope/feedback/selected_label)
@@ -15,17 +18,29 @@
  * (WS.md §4.5). The agent's pending Promise resolves with the in-process
  * `ApprovalResponse` equivalent and the prompt continues.
  *
- * **Idempotency** (REST.md §3.6 + W7 40903 precedent): a second resolve on
- * the same approval_id returns envelope `code: 40902` with `data.resolved:
- * false` rather than a bare error envelope. This matches the W7
- * `:abort` idempotency shape (`code: 40903 + data.aborted: false`) so
- * clients can dispatch on `code` and read the same `data` shape regardless.
+ * **Idempotency** (REST.md §3.6): a second resolve on the same approval_id
+ * returns envelope `code: 40902` with `data.resolved: false` rather than a
+ * bare error envelope. This matches the `:abort` idempotency shape
+ * (`code: 40903 + data.aborted: false`) so clients can dispatch on `code` and
+ * read the same `data` shape regardless.
  */
 
 import { z } from 'zod';
 
-import { approvalResponseSchema } from '../approval';
+import { approvalRequestSchema, approvalResponseSchema } from '../approval';
 import { isoDateTimeSchema } from '../time';
+
+// --- GET /v1/sessions/{sid}/approvals?status=pending -----------------------
+
+export const listPendingApprovalsQuerySchema = z.object({
+  status: z.literal('pending'),
+});
+export type ListPendingApprovalsQuery = z.infer<typeof listPendingApprovalsQuerySchema>;
+
+export const listPendingApprovalsResponseSchema = z.object({
+  items: z.array(approvalRequestSchema),
+});
+export type ListPendingApprovalsResponse = z.infer<typeof listPendingApprovalsResponseSchema>;
 
 // --- POST /v1/sessions/{sid}/approvals/{aid} --------------------------------
 

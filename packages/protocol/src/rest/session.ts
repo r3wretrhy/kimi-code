@@ -1,13 +1,19 @@
 /**
- * Session CRUD endpoint schemas (REST.md §3.3).
+ * Session endpoint schemas (REST.md §3.3).
  *
- * Exposes Zod schemas + TS types for the 5 endpoint payloads in REST §3.3:
+ * Exposes Zod schemas + TS types for session endpoint payloads:
  *
- *   POST    /v1/sessions               body: SessionCreate   data: Session
- *   GET     /v1/sessions               query: ListSessions   data: Page<Session>
- *   GET     /v1/sessions/{id}          -                     data: Session
- *   PATCH   /v1/sessions/{id}          body: SessionUpdate   data: Session
- *   DELETE  /v1/sessions/{id}          -                     data: { deleted: true }
+ *   POST    /v1/sessions                  body: SessionCreate   data: Session
+ *   GET     /v1/sessions                  query: ListSessions   data: Page<Session>
+ *   GET     /v1/sessions/{id}             -                     data: Session
+ *   GET     /v1/sessions/{id}/profile     -                     data: Session
+ *   POST    /v1/sessions/{id}/profile     body: SessionUpdate   data: Session
+ *   POST    /v1/sessions/{id}:fork        body: SessionFork     data: Session
+ *   GET     /v1/sessions/{id}/children    query: ListSessions   data: Page<Session>
+ *   POST    /v1/sessions/{id}/children    body: SessionChild    data: Session
+ *   GET     /v1/sessions/{id}/status      -                     data: SessionStatus
+ *   POST    /v1/sessions/{id}:compact     body: CompactSession  data: {}
+ *   DELETE  /v1/sessions/{id}             -                     data: { deleted: true }
  *
  * Cursor pagination (REST §1.6 / SCHEMAS §1.3) is shared via
  * `cursorQuerySchema`; we extend it with an optional `status` filter per
@@ -20,9 +26,11 @@
 
 import { z } from 'zod';
 
-import { cursorQuerySchema } from '../pagination';
+import { cursorQuerySchema, pageResponseSchema } from '../pagination';
 import {
+  sessionChildCreateSchema,
   sessionCreateSchema,
+  sessionForkSchema,
   sessionSchema,
   sessionStatusSchema,
   sessionUpdateSchema,
@@ -57,13 +65,82 @@ export type ListSessionsQuery = z.infer<typeof listSessionsQuerySchema>;
 export const getSessionResponseSchema = sessionSchema;
 export type GetSessionResponse = z.infer<typeof getSessionResponseSchema>;
 
-// --- PATCH /v1/sessions/{id} ------------------------------------------------
+// --- GET /v1/sessions/{id}/profile ----------------------------------------
+
+export const getSessionProfileResponseSchema = sessionSchema;
+export type GetSessionProfileResponse = z.infer<typeof getSessionProfileResponseSchema>;
+
+// --- POST /v1/sessions/{id}/profile ---------------------------------------
+// Per design principle: no PATCH on sessions; mutating properties go through
+// an explicit action-suffix endpoint.
+
+export const updateSessionProfileRequestSchema = sessionUpdateSchema;
+export type UpdateSessionProfileRequest = z.infer<typeof updateSessionProfileRequestSchema>;
+
+export const updateSessionProfileResponseSchema = sessionSchema;
+export type UpdateSessionProfileResponse = z.infer<typeof updateSessionProfileResponseSchema>;
+
+// --- Deprecated aliases ----------------------------------------------------
+
+export const updateSessionMetaRequestSchema = updateSessionProfileRequestSchema;
+export type UpdateSessionMetaRequest = UpdateSessionProfileRequest;
+
+export const updateSessionMetaResponseSchema = updateSessionProfileResponseSchema;
+export type UpdateSessionMetaResponse = UpdateSessionProfileResponse;
 
 export const updateSessionRequestSchema = sessionUpdateSchema;
 export type UpdateSessionRequest = z.infer<typeof updateSessionRequestSchema>;
 
 export const updateSessionResponseSchema = sessionSchema;
 export type UpdateSessionResponse = z.infer<typeof updateSessionResponseSchema>;
+
+// --- POST /v1/sessions/{id}:fork ------------------------------------------
+
+export const forkSessionRequestSchema = sessionForkSchema;
+export type ForkSessionRequest = z.infer<typeof forkSessionRequestSchema>;
+
+export const forkSessionResponseSchema = sessionSchema;
+export type ForkSessionResponse = z.infer<typeof forkSessionResponseSchema>;
+
+// --- GET/POST /v1/sessions/{id}/children ------------------------------------
+
+export const listSessionChildrenQuerySchema = listSessionsQuerySchema;
+export type ListSessionChildrenQuery = z.infer<typeof listSessionChildrenQuerySchema>;
+
+export const listSessionChildrenResponseSchema = pageResponseSchema(sessionSchema);
+export type ListSessionChildrenResponse = z.infer<typeof listSessionChildrenResponseSchema>;
+
+export const createSessionChildRequestSchema = sessionChildCreateSchema;
+export type CreateSessionChildRequest = z.infer<typeof createSessionChildRequestSchema>;
+
+export const createSessionChildResponseSchema = sessionSchema;
+export type CreateSessionChildResponse = z.infer<typeof createSessionChildResponseSchema>;
+
+// --- GET /v1/sessions/{id}/status -----------------------------------------
+
+export const sessionStatusResponseSchema = z.object({
+  model: z.string().optional(),
+  thinking_level: z.string(),
+  permission: z.string(),
+  plan_mode: z.boolean(),
+  context_tokens: z.number().int().nonnegative(),
+  max_context_tokens: z.number().int().nonnegative(),
+  context_usage: z.number().min(0).max(1),
+});
+export type SessionStatusResponse = z.infer<typeof sessionStatusResponseSchema>;
+
+// --- POST /v1/sessions/{id}:compact ---------------------------------------
+
+export const compactSessionRequestSchema = z.preprocess(
+  (value) => value === undefined ? {} : value,
+  z.object({
+    instruction: z.string().optional(),
+  }),
+);
+export type CompactSessionRequest = z.infer<typeof compactSessionRequestSchema>;
+
+export const compactSessionResponseSchema = z.object({});
+export type CompactSessionResponse = z.infer<typeof compactSessionResponseSchema>;
 
 // --- DELETE /v1/sessions/{id} -----------------------------------------------
 

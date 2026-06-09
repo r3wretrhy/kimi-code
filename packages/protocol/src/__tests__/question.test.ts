@@ -18,6 +18,8 @@ import {
   questionResolveResultSchema,
   questionAlreadyResolvedDataSchema,
   questionDismissResultSchema,
+  listPendingQuestionsQuerySchema,
+  listPendingQuestionsResponseSchema,
 } from '../rest/question';
 
 describe('questionOptionSchema (SCHEMAS §6.2)', () => {
@@ -247,5 +249,44 @@ describe('questionDismissResultSchema (REST §3.6 dismiss with code 40909)', () 
         dismissed_at: '2026-06-04T10:32:00Z',
       }),
     ).toThrow();
+  });
+});
+
+describe('listPendingQuestionsResponseSchema (REST pending recovery)', () => {
+  const pendingQuestion = {
+    question_id: '01J_QUESTION',
+    session_id: 'sess_x',
+    questions: [
+      {
+        id: 'q_1',
+        question: 'Which?',
+        options: [
+          { id: 'opt_1', label: 'A' },
+          { id: 'opt_2', label: 'B' },
+        ],
+      },
+    ],
+    created_at: '2026-06-04T10:30:00Z',
+    expires_at: '2026-06-04T10:31:00Z',
+  };
+
+  it('accepts status=pending query', () => {
+    expect(listPendingQuestionsQuerySchema.parse({ status: 'pending' })).toEqual({
+      status: 'pending',
+    });
+  });
+
+  it('rejects unsupported status query', () => {
+    expect(() =>
+      listPendingQuestionsQuerySchema.parse({ status: 'answered' }),
+    ).toThrow();
+  });
+
+  it('returns question request items', () => {
+    const parsed = listPendingQuestionsResponseSchema.parse({
+      items: [pendingQuestion],
+    });
+    expect(parsed.items[0]?.question_id).toBe('01J_QUESTION');
+    expect(parsed.items[0]?.questions[0]?.options).toHaveLength(2);
   });
 });

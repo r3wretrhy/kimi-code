@@ -13,11 +13,15 @@ import {
 } from '../rest/prompt';
 
 describe('promptSubmissionSchema', () => {
-  it('accepts a minimal text submission', () => {
+  it('accepts a minimal text-only submission with no controls', () => {
     const parsed = promptSubmissionSchema.parse({
       content: [{ type: 'text', text: 'hi' }],
     });
     expect(parsed.content[0]?.type).toBe('text');
+    expect(parsed.model).toBeUndefined();
+    expect(parsed.thinking).toBeUndefined();
+    expect(parsed.permission_mode).toBeUndefined();
+    expect(parsed.plan_mode).toBeUndefined();
   });
 
   it('accepts metadata', () => {
@@ -38,14 +42,66 @@ describe('promptSubmissionSchema', () => {
     expect(parsed.content).toHaveLength(2);
   });
 
+  it('accepts a partial per-turn override (model only)', () => {
+    const parsed = promptSubmissionSchema.parse({
+      content: [{ type: 'text', text: 'hi' }],
+      model: 'kimi-code/k2',
+    });
+    expect(parsed.model).toBe('kimi-code/k2');
+    expect(parsed.thinking).toBeUndefined();
+  });
+
+  it('accepts the full bundle of controls when supplied', () => {
+    const parsed = promptSubmissionSchema.parse({
+      content: [{ type: 'text', text: 'hi' }],
+      model: 'kimi-code/k2',
+      thinking: 'off',
+      permission_mode: 'manual',
+      plan_mode: false,
+    });
+    expect(parsed.model).toBe('kimi-code/k2');
+    expect(parsed.thinking).toBe('off');
+    expect(parsed.permission_mode).toBe('manual');
+    expect(parsed.plan_mode).toBe(false);
+  });
+
   it('rejects empty content array', () => {
     expect(
-      promptSubmissionSchema.safeParse({ content: [] }).success,
+      promptSubmissionSchema.safeParse({
+        content: [],
+      }).success,
     ).toBe(false);
   });
 
   it('rejects missing content', () => {
     expect(promptSubmissionSchema.safeParse({} as unknown).success).toBe(false);
+  });
+
+  it('rejects unknown thinking level', () => {
+    expect(
+      promptSubmissionSchema.safeParse({
+        content: [{ type: 'text', text: 'hi' }],
+        thinking: 'mega' as unknown,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects unknown permission_mode', () => {
+    expect(
+      promptSubmissionSchema.safeParse({
+        content: [{ type: 'text', text: 'hi' }],
+        permission_mode: 'unrestricted' as unknown,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects empty model string', () => {
+    expect(
+      promptSubmissionSchema.safeParse({
+        content: [{ type: 'text', text: 'hi' }],
+        model: '',
+      }).success,
+    ).toBe(false);
   });
 });
 

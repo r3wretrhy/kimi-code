@@ -15,6 +15,8 @@ import {
   approvalResolveRequestSchema,
   approvalResolveResultSchema,
   approvalAlreadyResolvedDataSchema,
+  listPendingApprovalsQuerySchema,
+  listPendingApprovalsResponseSchema,
 } from '../rest/approval';
 
 describe('approvalDecisionSchema (SCHEMAS §6.1)', () => {
@@ -140,5 +142,42 @@ describe('approvalAlreadyResolvedDataSchema (REST §3.6 idempotent 40902)', () =
 
   it('rejects resolved:true here', () => {
     expect(() => approvalAlreadyResolvedDataSchema.parse({ resolved: true })).toThrow();
+  });
+});
+
+describe('listPendingApprovalsResponseSchema (REST pending recovery)', () => {
+  const pendingApproval = {
+    approval_id: '01J0000000APPROVAL',
+    session_id: 'sess_x',
+    tool_call_id: 'tc_1',
+    tool_name: 'shell.run',
+    action: 'Run `ls`',
+    tool_input_display: { kind: 'command', command: 'ls', summary: 'ls' },
+    created_at: '2026-06-04T10:30:00Z',
+    expires_at: '2026-06-04T10:31:00Z',
+  };
+
+  it('accepts status=pending query', () => {
+    expect(listPendingApprovalsQuerySchema.parse({ status: 'pending' })).toEqual({
+      status: 'pending',
+    });
+  });
+
+  it('rejects unsupported status query', () => {
+    expect(() =>
+      listPendingApprovalsQuerySchema.parse({ status: 'resolved' }),
+    ).toThrow();
+  });
+
+  it('returns approval request items', () => {
+    const parsed = listPendingApprovalsResponseSchema.parse({
+      items: [pendingApproval],
+    });
+    expect(parsed.items[0]?.approval_id).toBe('01J0000000APPROVAL');
+    expect(parsed.items[0]?.tool_input_display).toEqual({
+      kind: 'command',
+      command: 'ls',
+      summary: 'ls',
+    });
   });
 });

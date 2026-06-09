@@ -1,5 +1,5 @@
 /**
- * Daemon REST + WS error codes (REST.md §1.4, PLAN.md §P2).
+ * Daemon REST + WS error codes (REST.md §1.4).
  *
  * Integer namespaces:
  *   - 0          success
@@ -10,8 +10,8 @@
  *   - 8xxxx      MCP server 透传 (msg = original upstream text)
  *   - 9xxxx      预留
  *
- * **整数稳定不变** (PLAN P2): a published code never changes meaning; new
- * error variants get fresh code positions. Several reserved codes are
+ * **整数稳定不变**: a published code never changes meaning; new error
+ * variants get fresh code positions. Several reserved codes are
  * intentionally absent from this enum (see "Reserved codes" comment below).
  */
 
@@ -26,7 +26,7 @@ export const ErrorCode = {
   /** JSON 解析失败、字段类型错 */
   REQUEST_MALFORMED: 40002,
 
-  // -- 4011x 上游 provider 鉴权 / 配置缺位 (P2.1 D1) --
+  // -- 4011x 上游 provider 鉴权 / 配置缺位 --
   /** daemon 没有任何 provider 配置 */
   AUTH_PROVISIONING_REQUIRED: 40110,
   /** provider 存在但 token / api_key 缺失 */
@@ -54,6 +54,14 @@ export const ErrorCode = {
   MCP_SERVER_NOT_FOUND: 40408,
   /** fs path 不存在 */
   FS_PATH_NOT_FOUND: 40409,
+  /** workspace_id 不存在 */
+  WORKSPACE_NOT_FOUND: 40410,
+  /** fs 路径存在但当前进程无权限读取 */
+  FS_PERMISSION_DENIED: 40411,
+  /** provider_id 不存在 */
+  PROVIDER_NOT_FOUND: 40412,
+  /** model_id 不存在 */
+  MODEL_NOT_FOUND: 40413,
 
   /** session 有正在进行的 prompt，拒绝新请求 */
   SESSION_BUSY: 40901,
@@ -73,6 +81,8 @@ export const ErrorCode = {
   FS_GIT_UNAVAILABLE: 40908,
   /** 用户 ESC / 关闭面板放弃整组（client 调 `:dismiss`） */
   QUESTION_DISMISSED: 40909,
+  /** 当前历史没有可 compact 的前缀 */
+  COMPACTION_UNABLE: 40910,
 
   /** approval 60s 超时 */
   APPROVAL_EXPIRED: 41001,
@@ -109,7 +119,7 @@ export const ErrorCode = {
 
   // -- 7xxxx LLM provider 透传 --
   // provider.* — provider 原 code 含义保留；`msg` 字段透传上游错误文本。
-  // 不在此枚举中静态列出，调用方应将 provider 原 code 直接放入 envelope.code（PLAN P2）。
+  // 不在此枚举中静态列出，调用方应将 provider 原 code 直接放入 envelope.code。
 
   // -- 8xxxx MCP server 透传 --
   // mcp.* — mcp server 原 code 含义保留；`msg` 字段透传上游错误文本。
@@ -124,14 +134,14 @@ export const ErrorCode = {
  *   - 42901 rate.limited
  *   - 50002 protocol.version_mismatch
  *
- * 4011x is now claimed (P2.1 D1) for "上游 provider 鉴权 / 配置缺位" —
- * semantically distinct from "daemon 自身鉴权", which the 4010x段 will
+ * 4011x is claimed for "上游 provider 鉴权 / 配置缺位" — semantically
+ * distinct from "daemon 自身鉴权", which the 4010x段 will
  * eventually carry. Sub-codes within 4012x+ remain open for future daemon
  * auth refinements.
  *
  * These cover features the first daemon version intentionally cuts (no auth,
  * no rate limiting, no version handshake). When those features land, they
- * MUST claim these specific codes (REST.md §1.4 注; PLAN P2 "整数稳定不变").
+ * MUST claim these specific codes (REST.md §1.4 注) to keep integers stable.
  */
 
 /**
@@ -168,6 +178,10 @@ export const ErrorCodeReason: Readonly<Record<ErrorCode, string>> = {
   [ErrorCode.FILE_NOT_FOUND]: 'file.not_found',
   [ErrorCode.MCP_SERVER_NOT_FOUND]: 'mcp.server_not_found',
   [ErrorCode.FS_PATH_NOT_FOUND]: 'fs.path_not_found',
+  [ErrorCode.WORKSPACE_NOT_FOUND]: 'workspace.not_found',
+  [ErrorCode.FS_PERMISSION_DENIED]: 'fs.permission_denied',
+  [ErrorCode.PROVIDER_NOT_FOUND]: 'provider.not_found',
+  [ErrorCode.MODEL_NOT_FOUND]: 'model.not_found',
 
   [ErrorCode.SESSION_BUSY]: 'session.busy',
   [ErrorCode.APPROVAL_ALREADY_RESOLVED]: 'approval.already_resolved',
@@ -178,6 +192,7 @@ export const ErrorCodeReason: Readonly<Record<ErrorCode, string>> = {
   [ErrorCode.FS_IS_BINARY]: 'fs.is_binary',
   [ErrorCode.FS_GIT_UNAVAILABLE]: 'fs.git_unavailable',
   [ErrorCode.QUESTION_DISMISSED]: 'question.dismissed',
+  [ErrorCode.COMPACTION_UNABLE]: 'compaction.unable',
 
   [ErrorCode.APPROVAL_EXPIRED]: 'approval.expired',
   [ErrorCode.QUESTION_EXPIRED]: 'question.expired',

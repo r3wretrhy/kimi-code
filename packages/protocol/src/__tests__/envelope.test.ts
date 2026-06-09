@@ -76,6 +76,8 @@ describe('error-codes', () => {
 
   it('ErrorCodeReason maps every numeric code to its domain.reason label', () => {
     expect(ErrorCodeReason[ErrorCode.SESSION_NOT_FOUND]).toBe('session.not_found');
+    expect(ErrorCodeReason[ErrorCode.PROVIDER_NOT_FOUND]).toBe('provider.not_found');
+    expect(ErrorCodeReason[ErrorCode.MODEL_NOT_FOUND]).toBe('model.not_found');
     expect(ErrorCodeReason[ErrorCode.VALIDATION_FAILED]).toBe('validation.failed');
     expect(ErrorCodeReason[ErrorCode.FS_WATCH_LIMIT_EXCEEDED]).toBe('fs.watch_limit_exceeded');
   });

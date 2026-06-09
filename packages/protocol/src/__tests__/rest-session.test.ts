@@ -8,21 +8,39 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  compactSessionRequestSchema,
+  compactSessionResponseSchema,
+  createSessionChildRequestSchema,
+  createSessionChildResponseSchema,
   createSessionRequestSchema,
   deleteSessionResponseSchema,
+  forkSessionRequestSchema,
+  forkSessionResponseSchema,
+  getSessionProfileResponseSchema,
+  listSessionChildrenResponseSchema,
   listSessionsQuerySchema,
+  sessionStatusResponseSchema,
+  updateSessionProfileRequestSchema,
   updateSessionRequestSchema,
 } from '../rest/session';
 
 describe('createSessionRequestSchema', () => {
   it('accepts a minimal POST body with metadata.cwd', () => {
     const parsed = createSessionRequestSchema.parse({ metadata: { cwd: '/tmp/foo' } });
-    expect(parsed.metadata.cwd).toBe('/tmp/foo');
+    expect(parsed.metadata?.cwd).toBe('/tmp/foo');
   });
 
-  it('rejects missing metadata.cwd', () => {
+  it('accepts a POST body with only workspace_id (route layer resolves cwd)', () => {
+    const parsed = createSessionRequestSchema.parse({
+      workspace_id: 'wd_kimi_0123456789ab',
+    });
+    expect(parsed.workspace_id).toBe('wd_kimi_0123456789ab');
+    expect(parsed.metadata).toBeUndefined();
+  });
+
+  it('rejects metadata without cwd', () => {
     expect(
-      createSessionRequestSchema.safeParse({ title: 'no cwd' } as unknown).success,
+      createSessionRequestSchema.safeParse({ metadata: {} } as unknown).success,
     ).toBe(false);
   });
 
@@ -71,15 +89,285 @@ describe('listSessionsQuerySchema', () => {
   });
 });
 
-describe('updateSessionRequestSchema', () => {
+describe('getSessionProfileResponseSchema', () => {
+  it('accepts a Session payload', () => {
+    const parsed = getSessionProfileResponseSchema.parse({
+      id: 'sess_abc',
+      workspace_id: 'wd_kimi_0123456789ab',
+      title: 'Profile',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      status: 'idle',
+      metadata: { cwd: '/tmp/foo' },
+      agent_config: { model: '' },
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_creation_tokens: 0,
+        total_cost_usd: 0,
+        context_tokens: 0,
+        context_limit: 0,
+        turn_count: 0,
+      },
+      permission_rules: [],
+      message_count: 0,
+      last_seq: 0,
+    });
+    expect(parsed.id).toBe('sess_abc');
+  });
+});
+
+describe('updateSessionProfileRequestSchema', () => {
   it('accepts a metadata patch (without cwd)', () => {
     expect(
-      updateSessionRequestSchema.parse({ metadata: { custom_field: 'x' } }),
+      updateSessionProfileRequestSchema.parse({ metadata: { custom_field: 'x' } }),
     ).toEqual({ metadata: { custom_field: 'x' } });
   });
 
-  it('accepts an empty PATCH body (no-op)', () => {
-    expect(updateSessionRequestSchema.parse({})).toEqual({});
+  it('accepts an empty POST body (no-op)', () => {
+    expect(updateSessionProfileRequestSchema.parse({})).toEqual({});
+  });
+
+  it('accepts agent_config.model', () => {
+    const parsed = updateSessionProfileRequestSchema.parse({
+      agent_config: { model: 'moonshot-v1-128k' },
+    });
+    expect(parsed.agent_config?.model).toBe('moonshot-v1-128k');
+  });
+
+  it('accepts agent_config runtime controls (thinking + permission_mode + plan_mode)', () => {
+    const parsed = updateSessionProfileRequestSchema.parse({
+      agent_config: {
+        thinking: 'medium',
+        permission_mode: 'auto',
+        plan_mode: false,
+      },
+    });
+    expect(parsed.agent_config).toEqual({
+      thinking: 'medium',
+      permission_mode: 'auto',
+      plan_mode: false,
+    });
+  });
+});
+
+describe('updateSessionRequestSchema (legacy alias)', () => {
+  it('round-trips through the same schema as updateSessionProfileRequestSchema', () => {
+    expect(updateSessionRequestSchema.parse({ metadata: { custom_field: 'x' } })).toEqual(
+      updateSessionProfileRequestSchema.parse({ metadata: { custom_field: 'x' } }),
+    );
+  });
+});
+
+describe('forkSessionRequestSchema', () => {
+  it('accepts an empty POST body', () => {
+    expect(forkSessionRequestSchema.parse({})).toEqual({});
+  });
+
+  it('accepts title and arbitrary metadata without requiring cwd', () => {
+    const parsed = forkSessionRequestSchema.parse({
+      title: 'Fork: source',
+      metadata: { origin: 'web', depth: 1 },
+    });
+    expect(parsed).toEqual({
+      title: 'Fork: source',
+      metadata: { origin: 'web', depth: 1 },
+    });
+  });
+
+  it('rejects non-object metadata', () => {
+    expect(forkSessionRequestSchema.safeParse({ metadata: 'x' }).success).toBe(false);
+  });
+});
+
+describe('forkSessionResponseSchema', () => {
+  it('accepts a Session payload', () => {
+    const parsed = forkSessionResponseSchema.parse({
+      id: 'sess_fork',
+      workspace_id: 'wd_kimi_0123456789ab',
+      title: 'Fork: source',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      status: 'idle',
+      metadata: { cwd: '/tmp/foo', origin: 'web' },
+      agent_config: { model: '' },
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_creation_tokens: 0,
+        total_cost_usd: 0,
+        context_tokens: 0,
+        context_limit: 0,
+        turn_count: 0,
+      },
+      permission_rules: [],
+      message_count: 0,
+      last_seq: 0,
+    });
+    expect(parsed.id).toBe('sess_fork');
+  });
+});
+
+describe('createSessionChildRequestSchema', () => {
+  it('accepts title and arbitrary metadata without requiring cwd', () => {
+    const parsed = createSessionChildRequestSchema.parse({
+      title: 'Side question',
+      metadata: { origin: 'web', topic: 'btw' },
+    });
+    expect(parsed).toEqual({
+      title: 'Side question',
+      metadata: { origin: 'web', topic: 'btw' },
+    });
+  });
+
+  it('rejects non-object metadata', () => {
+    expect(createSessionChildRequestSchema.safeParse({ metadata: 'x' }).success).toBe(false);
+  });
+});
+
+describe('createSessionChildResponseSchema', () => {
+  it('accepts a Session payload', () => {
+    const parsed = createSessionChildResponseSchema.parse({
+      id: 'sess_child',
+      workspace_id: 'wd_kimi_0123456789ab',
+      title: 'Child: source',
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      status: 'idle',
+      metadata: { cwd: '/tmp/foo', parent_session_id: 'sess_parent' },
+      agent_config: { model: '' },
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_creation_tokens: 0,
+        total_cost_usd: 0,
+        context_tokens: 0,
+        context_limit: 0,
+        turn_count: 0,
+      },
+      permission_rules: [],
+      message_count: 0,
+      last_seq: 0,
+    });
+    expect(parsed.metadata['parent_session_id']).toBe('sess_parent');
+  });
+});
+
+describe('listSessionChildrenResponseSchema', () => {
+  it('accepts a paged list of child sessions', () => {
+    const parsed = listSessionChildrenResponseSchema.parse({
+      items: [
+        {
+          id: 'sess_child',
+          workspace_id: 'wd_kimi_0123456789ab',
+          title: 'Child: source',
+          created_at: '2026-01-01T00:00:00.000Z',
+          updated_at: '2026-01-01T00:00:00.000Z',
+          status: 'idle',
+          metadata: { cwd: '/tmp/foo', parent_session_id: 'sess_parent' },
+          agent_config: { model: '' },
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            total_cost_usd: 0,
+            context_tokens: 0,
+            context_limit: 0,
+            turn_count: 0,
+          },
+          permission_rules: [],
+          message_count: 0,
+          last_seq: 0,
+        },
+      ],
+      has_more: false,
+    });
+    expect(parsed.items).toHaveLength(1);
+  });
+});
+
+describe('sessionStatusResponseSchema', () => {
+  it('accepts a full valid shape', () => {
+    const parsed = sessionStatusResponseSchema.parse({
+      model: 'moonshot-v1-128k',
+      thinking_level: 'on',
+      permission: 'ask',
+      plan_mode: true,
+      context_tokens: 1024,
+      max_context_tokens: 128000,
+      context_usage: 0.008,
+    });
+    expect(parsed.model).toBe('moonshot-v1-128k');
+    expect(parsed.plan_mode).toBe(true);
+    expect(parsed.context_usage).toBe(0.008);
+  });
+
+  it('accepts minimal shape without model', () => {
+    const parsed = sessionStatusResponseSchema.parse({
+      thinking_level: 'off',
+      permission: 'auto',
+      plan_mode: false,
+      context_tokens: 0,
+      max_context_tokens: 0,
+      context_usage: 0,
+    });
+    expect(parsed.model).toBeUndefined();
+  });
+
+  it('rejects negative context_tokens', () => {
+    expect(
+      sessionStatusResponseSchema.safeParse({
+        thinking_level: 'off',
+        permission: 'auto',
+        plan_mode: false,
+        context_tokens: -1,
+        max_context_tokens: 0,
+        context_usage: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects context_usage > 1', () => {
+    expect(
+      sessionStatusResponseSchema.safeParse({
+        thinking_level: 'off',
+        permission: 'auto',
+        plan_mode: false,
+        context_tokens: 10,
+        max_context_tokens: 5,
+        context_usage: 2,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('compactSessionRequestSchema', () => {
+  it('accepts an empty body', () => {
+    expect(compactSessionRequestSchema.parse({})).toEqual({});
+  });
+
+  it('treats a missing body as empty', () => {
+    expect(compactSessionRequestSchema.parse(undefined)).toEqual({});
+  });
+
+  it('accepts an optional instruction string', () => {
+    expect(compactSessionRequestSchema.parse({ instruction: '  focus on decisions  ' })).toEqual({
+      instruction: '  focus on decisions  ',
+    });
+  });
+
+  it('rejects a non-string instruction', () => {
+    expect(compactSessionRequestSchema.safeParse({ instruction: 123 }).success).toBe(false);
+  });
+});
+
+describe('compactSessionResponseSchema', () => {
+  it('accepts the empty success payload', () => {
+    expect(compactSessionResponseSchema.parse({})).toEqual({});
   });
 });
 

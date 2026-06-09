@@ -1,7 +1,10 @@
 /**
- * Question REST endpoint schemas (REST.md §3.6, W8.2 / Chain 6).
+ * Question REST endpoint schemas (REST.md §3.6).
  *
- * 2 endpoints:
+ * 3 endpoints:
+ *
+ *   GET    /v1/sessions/{sid}/questions?status=pending
+ *     Reply: { items: QuestionRequest[] }
  *
  *   POST   /v1/sessions/{sid}/questions/{qid}             (resolve)
  *     Body:  QuestionResponse (answers map + method? + note?)
@@ -16,14 +19,26 @@
  *     answering, agent-core receives a `null` QuestionResult.
  *
  * **Idempotency** (REST.md §3.6): a second resolve on the same question_id
- * returns envelope `code: 40902` with `data.resolved: false` (mirrors W7's
- * 40903 + W8.1's 40902 approval pattern).
+ * returns envelope `code: 40902` with `data.resolved: false` (matches the
+ * existing 40903 / approval 40902 idempotent pattern).
  */
 
 import { z } from 'zod';
 
-import { questionResponseSchema } from '../question';
+import { questionRequestSchema, questionResponseSchema } from '../question';
 import { isoDateTimeSchema } from '../time';
+
+// --- GET /v1/sessions/{sid}/questions?status=pending ------------------------
+
+export const listPendingQuestionsQuerySchema = z.object({
+  status: z.literal('pending'),
+});
+export type ListPendingQuestionsQuery = z.infer<typeof listPendingQuestionsQuerySchema>;
+
+export const listPendingQuestionsResponseSchema = z.object({
+  items: z.array(questionRequestSchema),
+});
+export type ListPendingQuestionsResponse = z.infer<typeof listPendingQuestionsResponseSchema>;
 
 // --- POST /v1/sessions/{sid}/questions/{qid} (resolve) ----------------------
 
