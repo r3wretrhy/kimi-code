@@ -8,8 +8,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   promptAbortResponseSchema,
+  promptListResponseSchema,
   promptSubmissionSchema,
   promptSubmitResultSchema,
+  promptSteerRequestSchema,
+  promptSteerResultSchema,
 } from '../rest/prompt';
 
 describe('promptSubmissionSchema', () => {
@@ -106,12 +109,16 @@ describe('promptSubmissionSchema', () => {
 });
 
 describe('promptSubmitResultSchema', () => {
-  it('parses the result shape', () => {
+  it('parses a running prompt result shape', () => {
     const parsed = promptSubmitResultSchema.parse({
       prompt_id: 'prompt_01HZ',
       user_message_id: 'msg_sess_01_000000',
+      status: 'running',
+      content: [{ type: 'text', text: 'hi' }],
+      created_at: '2026-06-09T00:00:00.000Z',
     });
     expect(parsed.prompt_id).toBe('prompt_01HZ');
+    expect(parsed.status).toBe('running');
   });
 
   it('rejects empty prompt_id', () => {
@@ -119,6 +126,50 @@ describe('promptSubmitResultSchema', () => {
       promptSubmitResultSchema.safeParse({ prompt_id: '', user_message_id: 'msg' })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('promptListResponseSchema', () => {
+  it('parses active and queued prompts', () => {
+    const parsed = promptListResponseSchema.parse({
+      active: {
+        prompt_id: 'prompt_active',
+        user_message_id: 'msg_active',
+        status: 'running',
+        content: [{ type: 'text', text: 'active' }],
+        created_at: '2026-06-09T00:00:00.000Z',
+      },
+      queued: [
+        {
+          prompt_id: 'prompt_queued',
+          user_message_id: 'msg_queued',
+          status: 'queued',
+          content: [{ type: 'text', text: 'queued' }],
+          created_at: '2026-06-09T00:00:01.000Z',
+        },
+      ],
+    });
+    expect(parsed.active?.status).toBe('running');
+    expect(parsed.queued[0]?.status).toBe('queued');
+  });
+});
+
+describe('promptSteerRequestSchema', () => {
+  it('requires at least one prompt id', () => {
+    expect(promptSteerRequestSchema.parse({ prompt_ids: ['prompt_a'] }).prompt_ids)
+      .toEqual(['prompt_a']);
+    expect(promptSteerRequestSchema.safeParse({ prompt_ids: [] }).success).toBe(false);
+  });
+});
+
+describe('promptSteerResultSchema', () => {
+  it('parses steered prompt ids', () => {
+    const parsed = promptSteerResultSchema.parse({
+      steered: true,
+      prompt_ids: ['prompt_a', 'prompt_b'],
+    });
+    expect(parsed.steered).toBe(true);
+    expect(parsed.prompt_ids).toEqual(['prompt_a', 'prompt_b']);
   });
 });
 

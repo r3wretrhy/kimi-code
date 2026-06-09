@@ -12,7 +12,17 @@
  *              permission_mode?: 'manual'|'yolo'|'auto',
  *              plan_mode?: boolean,
  *            }
- *     Reply: PromptSubmitResult { prompt_id, user_message_id }
+ *     Reply: PromptSubmitResult { prompt_id, user_message_id, status, content, created_at }
+ *            status='running' when sent immediately, status='queued' when
+ *            another prompt is already active.
+ *
+ *   GET /v1/sessions/{sid}/prompts
+ *     Reply: { active: PromptItem | null, queued: PromptItem[] }
+ *
+ *   POST /v1/sessions/{sid}/prompts/{pid}:steer
+ *   POST /v1/sessions/{sid}/prompts:steer
+ *     Body:  { prompt_ids: string[] } for the collection route
+ *     Reply: { steered: true, prompt_ids: string[] }
  *
  *   POST /v1/sessions/{sid}/prompts/{pid}:abort
  *     Body:  empty
@@ -36,15 +46,15 @@
  *
  * **Synthesized lifecycle events**:
  * agent-core's event union has no `prompt.completed` / `prompt.aborted`
- * types. The daemon synthesizes them at the IEventService layer when a
- * top-level `turn.ended` fires for a prompt — see
- * `packages/services/src/prompt/promptService.ts`. Wire types live
+ * / `prompt.steered` types. The daemon synthesizes them at the IEventService
+ * layer — see `packages/services/src/prompt/promptService.ts`. Wire types live
  * here so clients can parse them.
  */
 
 import { z } from 'zod';
 
 import { messageContentSchema } from '../message';
+import { isoDateTimeSchema } from '../time';
 
 // --- SCHEMAS §5 PromptSubmission --------------------------------------------
 
@@ -99,13 +109,43 @@ export const promptSubmissionSchema = z.object({
 });
 export type PromptSubmission = z.infer<typeof promptSubmissionSchema>;
 
-// --- SCHEMAS §5 PromptSubmitResult ------------------------------------------
+// --- Prompt queue item ------------------------------------------------------
 
-export const promptSubmitResultSchema = z.object({
+export const promptStatusSchema = z.enum(['running', 'queued']);
+export type PromptStatus = z.infer<typeof promptStatusSchema>;
+
+export const promptItemSchema = z.object({
   prompt_id: z.string().min(1),
   user_message_id: z.string().min(1),
+  status: promptStatusSchema,
+  content: z.array(messageContentSchema).min(1),
+  created_at: isoDateTimeSchema,
 });
+export type PromptItem = z.infer<typeof promptItemSchema>;
+
+export const promptListResponseSchema = z.object({
+  active: promptItemSchema.nullable(),
+  queued: z.array(promptItemSchema),
+});
+export type PromptListResponse = z.infer<typeof promptListResponseSchema>;
+
+// --- SCHEMAS §5 PromptSubmitResult ------------------------------------------
+
+export const promptSubmitResultSchema = promptItemSchema;
 export type PromptSubmitResult = z.infer<typeof promptSubmitResultSchema>;
+
+// --- Steer request/result shapes -------------------------------------------
+
+export const promptSteerRequestSchema = z.object({
+  prompt_ids: z.array(z.string().min(1)).min(1),
+});
+export type PromptSteerRequest = z.infer<typeof promptSteerRequestSchema>;
+
+export const promptSteerResultSchema = z.object({
+  steered: z.literal(true),
+  prompt_ids: z.array(z.string().min(1)).min(1),
+});
+export type PromptSteerResult = z.infer<typeof promptSteerResultSchema>;
 
 // --- Abort response shape ---------------------------------------------------
 
@@ -151,4 +191,14 @@ export interface PromptAbortedEventPayload {
   readonly sessionId: string;
   readonly promptId: string;
   readonly abortedAt: string;
+}
+
+export interface PromptSteeredEventPayload {
+  readonly type: 'prompt.steered';
+  readonly agentId: string;
+  readonly sessionId: string;
+  readonly activePromptId: string;
+  readonly promptIds: readonly string[];
+  readonly content: PromptSubmission['content'];
+  readonly steeredAt: string;
 }
