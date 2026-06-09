@@ -83,6 +83,8 @@ export const ErrorCode = {
   QUESTION_DISMISSED: 40909,
   /** 当前历史没有可 compact 的前缀 */
   COMPACTION_UNABLE: 40910,
+  /** 当前历史没有足够的用户提示词可撤回 */
+  SESSION_UNDO_UNAVAILABLE: 40911,
 
   /** approval 60s 超时 */
   APPROVAL_EXPIRED: 41001,
@@ -193,6 +195,7 @@ export const ErrorCodeReason: Readonly<Record<ErrorCode, string>> = {
   [ErrorCode.FS_GIT_UNAVAILABLE]: 'fs.git_unavailable',
   [ErrorCode.QUESTION_DISMISSED]: 'question.dismissed',
   [ErrorCode.COMPACTION_UNABLE]: 'compaction.unable',
+  [ErrorCode.SESSION_UNDO_UNAVAILABLE]: 'session.undo_unavailable',
 
   [ErrorCode.APPROVAL_EXPIRED]: 'approval.expired',
   [ErrorCode.QUESTION_EXPIRED]: 'question.expired',

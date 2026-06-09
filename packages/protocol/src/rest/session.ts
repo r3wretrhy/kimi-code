@@ -13,6 +13,7 @@
  *   POST    /v1/sessions/{id}/children    body: SessionChild    data: Session
  *   GET     /v1/sessions/{id}/status      -                     data: SessionStatus
  *   POST    /v1/sessions/{id}:compact     body: CompactSession  data: {}
+ *   POST    /v1/sessions/{id}:undo        body: UndoSession     data: UndoSession
  *   DELETE  /v1/sessions/{id}             -                     data: { deleted: true }
  *
  * Cursor pagination (REST §1.6 / SCHEMAS §1.3) is shared via
@@ -26,6 +27,7 @@
 
 import { z } from 'zod';
 
+import { messageSchema } from '../message';
 import { cursorQuerySchema, pageResponseSchema } from '../pagination';
 import {
   sessionChildCreateSchema,
@@ -141,6 +143,23 @@ export type CompactSessionRequest = z.infer<typeof compactSessionRequestSchema>;
 
 export const compactSessionResponseSchema = z.object({});
 export type CompactSessionResponse = z.infer<typeof compactSessionResponseSchema>;
+
+// --- POST /v1/sessions/{id}:undo ------------------------------------------
+
+export const undoSessionRequestSchema = z.preprocess(
+  (value) => value === undefined ? {} : value,
+  z.object({
+    count: z.number().int().positive().default(1),
+    page_size: z.number().int().min(1).max(100).optional(),
+  }),
+);
+export type UndoSessionRequest = z.infer<typeof undoSessionRequestSchema>;
+
+export const undoSessionResponseSchema = z.object({
+  messages: pageResponseSchema(messageSchema),
+  status: sessionStatusResponseSchema,
+});
+export type UndoSessionResponse = z.infer<typeof undoSessionResponseSchema>;
 
 // --- DELETE /v1/sessions/{id} -----------------------------------------------
 

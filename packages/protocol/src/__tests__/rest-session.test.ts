@@ -22,6 +22,8 @@ import {
   sessionStatusResponseSchema,
   updateSessionProfileRequestSchema,
   updateSessionRequestSchema,
+  undoSessionRequestSchema,
+  undoSessionResponseSchema,
 } from '../rest/session';
 
 describe('createSessionRequestSchema', () => {
@@ -368,6 +370,54 @@ describe('compactSessionRequestSchema', () => {
 describe('compactSessionResponseSchema', () => {
   it('accepts the empty success payload', () => {
     expect(compactSessionResponseSchema.parse({})).toEqual({});
+  });
+});
+
+describe('undoSessionRequestSchema', () => {
+  it('defaults a missing body to undoing one prompt', () => {
+    expect(undoSessionRequestSchema.parse(undefined)).toEqual({ count: 1 });
+  });
+
+  it('accepts a positive count and bounded page size', () => {
+    expect(undoSessionRequestSchema.parse({ count: 2, page_size: 25 })).toEqual({
+      count: 2,
+      page_size: 25,
+    });
+  });
+
+  it('rejects zero count and oversized page size', () => {
+    expect(undoSessionRequestSchema.safeParse({ count: 0 }).success).toBe(false);
+    expect(undoSessionRequestSchema.safeParse({ page_size: 101 }).success).toBe(false);
+  });
+});
+
+describe('undoSessionResponseSchema', () => {
+  it('accepts messages plus the refreshed session status', () => {
+    const parsed = undoSessionResponseSchema.parse({
+      messages: {
+        items: [
+          {
+            id: 'msg_sess_abc_000000',
+            session_id: 'sess_abc',
+            role: 'user',
+            content: [{ type: 'text', text: 'kept' }],
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        has_more: false,
+      },
+      status: {
+        model: 'kimi-k2',
+        thinking_level: 'auto',
+        permission: 'manual',
+        plan_mode: false,
+        context_tokens: 10,
+        max_context_tokens: 100,
+        context_usage: 0.1,
+      },
+    });
+    expect(parsed.messages.items).toHaveLength(1);
+    expect(parsed.status.context_tokens).toBe(10);
   });
 });
 
